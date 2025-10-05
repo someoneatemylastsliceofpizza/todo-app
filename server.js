@@ -1,13 +1,13 @@
 const { createServer } = require("http");
 const next = require("next");
 const { Server } = require("socket.io");
+const { PrismaClient } = require("@prisma/client");
+
+const prisma = new PrismaClient();
 
 const dev = process.env.NODE_ENV !== "production";
 const app = next({ dev });
 const handle = app.getRequestHandler();
-
-let todos = [];
-let history = [];
 
 app.prepare().then(() => {
   const server = createServer((req, res) => {
@@ -16,37 +16,103 @@ app.prepare().then(() => {
 
   const io = new Server(server);
 
-  io.on("connection", (socket) => {
+  io.on("connection", async (socket) => {
     console.log("client connected from ", socket.handshake.address);
+
+    const todos = await prisma.todo.findMany();
+    const history = await prisma.history.findMany({ orderBy: { id: "asc" } });
 
     socket.emit("init", { todos, history });
 
-    socket.on("firstupdate", () => {
+    socket.on("firstupdate", async () => {
+      const todos = await prisma.todo.findMany();
+      const history = await prisma.history.findMany({
+        orderBy: { timestamp: "asc" },
+      });
       io.emit("update", { todos, history });
     });
 
-    socket.on("add", (todo) => {
-      todos.push(todo);
-      history.push({ action: "Added", todo, timestamp: Date.now() });
+    socket.on("add", async (todo) => {
+      const createdTodo = await prisma.todo.create({
+        data: {
+          ...todo,
+          timestamp: new Date(todo.timestamp),
+        },
+      });
+
+      await prisma.history.create({
+        data: {
+          action: "Added",
+          name: createdTodo.name,
+          todoId: createdTodo.id,
+          important: createdTodo.important,
+          timestamp: createdTodo.timestamp,
+        },
+      });
+
+      const todos = await prisma.todo.findMany();
+      const history = await prisma.history.findMany({
+        orderBy: { timestamp: "asc" },
+      });
+
       io.emit("update", { todos, history });
     });
 
-    socket.on("edit", (todo) => {
-      const idx = todos.findIndex((t) => t.id === todo.id);
-      if (idx >= 0) {
-        todos[idx] = todo;
-        history.push({ action: "Edited", todo, timestamp: Date.now() });
-        io.emit("update", { todos, history });
-      }
+    socket.on("edit", async (todo) => {
+      const oldtodo = await prisma.todo.findUnique({ where: { id: todo.id } });
+      await prisma.todo.update({
+        where: { id: todo.id },
+        data: {
+          name: todo.name,
+          note: todo.note,
+          important: todo.important,
+          timestamp: todo.timestamp,
+        },
+      });
+      await prisma.history.create({
+        data: {
+          action: "Edited",
+          name: oldtodo.name,
+          newname: todo.name,
+          note: oldtodo.note,
+          newnote: todo.note,
+          important: oldtodo.important,
+          newimportant: todo.important,
+          timestamp: oldtodo.timestamp,
+          newtimestamp: todo.timestamp,
+        },
+      });
+
+      const todos = await prisma.todo.findMany();
+      const history = await prisma.history.findMany({
+        orderBy: { timestamp: "asc" },
+      });
+      io.emit("update", { todos, history });
     });
 
-    socket.on("delete", (id) => {
-      const idx = todos.findIndex((t) => t.id === id);
-      if (idx >= 0) {
-        const [removed] = todos.splice(idx, 1);
-        history.push({ action: "Deleted", todo: removed, timestamp: Date.now() });
-        io.emit("update", { todos, history });
-      }
+    socket.on("delete", async (id) => {
+      const removed = await prisma.todo.findUnique({ where: { id } });
+      if (!removed) return;
+
+      // record snapshot into history
+      await prisma.history.create({
+        data: {
+          action: "Deleted",
+          todoId: removed.id,
+          name: removed.name,
+          note: removed.note,
+          important: removed.important,
+          timestamp: new Date(),
+        },
+      });
+
+      await prisma.todo.delete({ where: { id } });
+
+      const todos = await prisma.todo.findMany();
+      const history = await prisma.history.findMany({
+        orderBy: { timestamp: "asc" },
+      });
+      io.emit("update", { todos, history });
     });
   });
 

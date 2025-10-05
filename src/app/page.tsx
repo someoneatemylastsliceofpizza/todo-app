@@ -10,13 +10,21 @@ type Todo = {
   name: string;
   note: string;
   important: number;
-  timestamp: number;
+  timestamp: Date | number;
 };
 
 type HistoryItem = {
+  id: string;
   action: string;
-  todo: Todo;
-  timestamp: number;
+  todoId?: string;
+  name: string;
+  note?: string;
+  newname?: string;
+  newNote?: string;
+  important: number;
+  newimportant: number;
+  timestamp: string | number;
+  newtimestamp: string | number;
 };
 
 export default function Home() {
@@ -52,7 +60,7 @@ export default function Home() {
       name,
       note,
       important,
-      timestamp: Date.now(),
+      timestamp: new Date(),
     });
     setName("");
     setNote("");
@@ -63,6 +71,7 @@ export default function Home() {
 
   const saveEdit = () => {
     if (!editingTodo) return;
+    editingTodo.timestamp = new Date();
     socket.emit("edit", editingTodo);
     setEditingTodo(null);
   };
@@ -116,7 +125,9 @@ export default function Home() {
           <div style={{ overflowY: "auto", flex: 1, marginBottom: "1rem" }}>
             {todos
               .sort(
-                (a, b) => b.important - a.important || b.timestamp - a.timestamp
+                (a, b) =>
+                  b.important - a.important ||
+                  (new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
               )
               .map((t) => (
                 <div
@@ -135,9 +146,15 @@ export default function Home() {
                     }}
                   >
                     <div style={{ flexDirection: "column", display: "flex" }}>
-                      <div style={{ flexDirection: "row", display: "flex", gap: "1rem" }}>
+                      <div
+                        style={{
+                          flexDirection: "row",
+                          display: "flex",
+                          gap: "1rem",
+                        }}
+                      >
                         <strong>{t.name}</strong>
-                        <div style={{color: "#ccc"}}>{t.note}</div>
+                        <div style={{ color: "#ccc" }}>{t.note}</div>
                       </div>
                       <div style={{ fontSize: "0.75rem", color: "#aaa" }}>
                         {new Date(t.timestamp).toLocaleString()}
@@ -145,7 +162,8 @@ export default function Home() {
                     </div>
                     <div style={{ display: "flex", gap: "0.5rem" }}>
                       <button
-                        onClick={() => startEdit(t)}
+                        onClick={() => {
+                          startEdit(t)}}
                         style={{
                           background: "#333",
                           color: "#f0f0f0",
@@ -186,7 +204,11 @@ export default function Home() {
                   </div>
                 </div>
               ))}
-            {todos.length === 0 && <div style={{ justifyItems:"center"}}><div>No todos yet.</div></div>}
+            {todos.length === 0 && (
+              <div style={{ justifyItems: "center" }}>
+                <div>No todos yet.</div>
+              </div>
+            )}
           </div>
 
           {/* Add/Edit Input Section */}
@@ -207,7 +229,7 @@ export default function Home() {
               }
               style={{
                 flex: "1 1 50%",
-                width: "50%",    
+                width: "50%",
                 paddingInline: "10px",
                 paddingBlock: "0.5rem",
                 borderRadius: "0.5rem",
@@ -290,18 +312,28 @@ export default function Home() {
         </div>
 
         {/* History Section */}
-        <div style={{ width: "100%", maxWidth: "300px", background: "#00000070", backdropFilter: "blur(50px)", padding: "1.5rem", borderRadius: "1rem", boxShadow: "0 5px 15px rgba(0,0,0,0.5)" }}>
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "300px",
+            background: "#00000070",
+            backdropFilter: "blur(50px)",
+            padding: "1.5rem",
+            borderRadius: "1rem",
+            boxShadow: "0 5px 15px rgba(0,0,0,0.5)",
+          }}
+        >
           <h2>History (Last 10)</h2>
           <ul>
             {history
               .slice(-10)
               .reverse()
               .map((h, i) => (
-                <li key={i} style={{ marginBottom: "0.25rem" }}>
-                  <span style={{ color: "#aaa" }}>
-                    [{new Date(h.timestamp).toLocaleTimeString()}]
-                  </span>{" "}
-                  {h.action}: {h.todo.name} {h.todo.note ? "(" : ""}{h.todo.note}{h.todo.note ? ")" : ""}
+                <li key={i}>
+                  <span>[{new Date(h.newtimestamp ? h.newtimestamp : h.timestamp).toLocaleTimeString()}]</span>{" "}
+                  {h.action}: {h.name} {h.note ? `(${h.note})` : ""}
+                  {h.newname ? ` → ${h.newname}` : ""}
+                  {h.newNote ? ` (${h.newNote})` : ""}
                 </li>
               ))}
           </ul>

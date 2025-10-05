@@ -12,6 +12,7 @@ type Todo = {
 type HistoryItem = {
   action: string;
   todo: Todo;
+  todoId: String;
   timestamp: number;
 };
 
@@ -33,7 +34,12 @@ export async function POST(req: NextRequest) {
     timestamp: Date.now(),
   };
   todos.push(todo);
-  history.push({ action: "Added", todo, timestamp: Date.now() });
+  history.push({
+    action: "Added",
+    todo,
+    todoId: todo.id,
+    timestamp: Date.now(),
+  });
   return NextResponse.json({ success: true });
 }
 
@@ -48,7 +54,7 @@ export async function PUT(req: NextRequest) {
       important: data.important ?? todos[idx].important,
       timestamp: Date.now(),
     };
-    history.push({ action: "Edited", todo: todos[idx], timestamp: Date.now() });
+    history.push({ action: "Edited", todo: todos[idx], todoId: todos[idx].id, timestamp: Date.now() });
   }
   return NextResponse.json({ success: true });
 }
@@ -58,7 +64,7 @@ export async function DELETE(req: NextRequest) {
   const idx = todos.findIndex((t) => t.id === data.id);
   if (idx >= 0) {
     const [removed] = todos.splice(idx, 1);
-    history.push({ action: "Deleted", todo: removed, timestamp: Date.now() });
+    history.push({ action: "Deleted", todo: removed, todoId: removed.id ,timestamp: Date.now() });
   }
   return NextResponse.json({ success: true });
 }

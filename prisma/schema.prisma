@@ -1,0 +1,30 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Todo {
+  id        String   @id
+  name      String
+  note      String?
+  important Int
+  timestamp DateTime
+}
+
+model History {
+  id        String   @id @default(uuid())
+  action    String
+  todoId    String?
+  name      String
+  note      String?
+  newname   String?
+  newnote   String?
+  important Int
+  newimportant Int?
+  timestamp DateTime
+  newtimestamp DateTime?
+}
