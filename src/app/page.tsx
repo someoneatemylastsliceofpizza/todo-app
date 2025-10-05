@@ -1,103 +1,312 @@
-import Image from "next/image";
+"use client";
+import { useState, useEffect } from "react";
+import { io } from "socket.io-client";
+import { v4 as uuid } from "uuid";
+
+const socket = io();
+
+type Todo = {
+  id: string;
+  name: string;
+  note: string;
+  important: number;
+  timestamp: number;
+};
+
+type HistoryItem = {
+  action: string;
+  todo: Todo;
+  timestamp: number;
+};
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [name, setName] = useState("");
+  const [note, setNote] = useState("");
+  const [important, setImportant] = useState(5);
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  useEffect(() => {
+    socket.on("init", (data) => {
+      setTodos(data.todos);
+      setHistory(data.history);
+    });
+    socket.on("update", (data) => {
+      setTodos(data.todos);
+      setHistory(data.history);
+    });
+
+    socket.emit("firstupdate");
+
+    return () => {
+      socket.off("init");
+      socket.off("update");
+    };
+  }, []);
+
+  const addTodo = () => {
+    if (!name) return;
+    socket.emit("add", {
+      id: uuid(),
+      name,
+      note,
+      important,
+      timestamp: Date.now(),
+    });
+    setName("");
+    setNote("");
+    setImportant(5);
+  };
+
+  const startEdit = (todo: Todo) => setEditingTodo(todo);
+
+  const saveEdit = () => {
+    if (!editingTodo) return;
+    socket.emit("edit", editingTodo);
+    setEditingTodo(null);
+  };
+
+  const deleteTodo = (id: string) => {
+    socket.emit("delete", id);
+  };
+
+  // setInterval(() => {
+  //   socket.emit("firstupdate");
+  // }, 4000);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100vh",
+        padding: "1rem",
+        backgroundImage: "url('/bg.png')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        color: "#f0f0f0",
+        fontFamily: "sans-serif",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          flexWrap: "wrap",
+          gap: "1rem",
+          justifyContent: "center",
+        }}
+      >
+        {/* Todo Section */}
+        <div
+          style={{
+            background: "#00000070",
+            padding: "1.5rem",
+            borderRadius: "1rem",
+            boxShadow: "0 5px 15px rgba(0,0,0,0.5)",
+            width: "100%",
+            maxWidth: "700px",
+            display: "flex",
+            flexDirection: "column",
+            backdropFilter: "blur(50px)",
+            flexGrow: 1,
+          }}
+        >
+          <div style={{ overflowY: "auto", flex: 1, marginBottom: "1rem" }}>
+            {todos
+              .sort(
+                (a, b) => b.important - a.important || b.timestamp - a.timestamp
+              )
+              .map((t) => (
+                <div
+                  key={t.id}
+                  style={{
+                    borderBottom: "1px solid #333",
+                    padding: "0.5rem 0",
+                    marginBottom: "0.5rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div style={{ flexDirection: "column", display: "flex" }}>
+                      <div style={{ flexDirection: "row", display: "flex", gap: "1rem" }}>
+                        <strong>{t.name}</strong>
+                        <div style={{color: "#ccc"}}>{t.note}</div>
+                      </div>
+                      <div style={{ fontSize: "0.75rem", color: "#aaa" }}>
+                        {new Date(t.timestamp).toLocaleString()}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <button
+                        onClick={() => startEdit(t)}
+                        style={{
+                          background: "#333",
+                          color: "#f0f0f0",
+                          border: "none",
+                          borderRadius: "0.25rem",
+                          padding: "0.25rem 0.5rem",
+                          cursor: "pointer",
+                        }}
+                        onMouseOver={(e) =>
+                          (e.currentTarget.style.background = "#555")
+                        }
+                        onMouseOut={(e) =>
+                          (e.currentTarget.style.background = "#333")
+                        }
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => deleteTodo(t.id)}
+                        style={{
+                          background: "#b00020",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "0.25rem",
+                          padding: "0.25rem 0.5rem",
+                          cursor: "pointer",
+                        }}
+                        onMouseOver={(e) =>
+                          (e.currentTarget.style.background = "#e53935")
+                        }
+                        onMouseOut={(e) =>
+                          (e.currentTarget.style.background = "#b00020")
+                        }
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            {todos.length === 0 && <div style={{ justifyItems:"center"}}><div>No todos yet.</div></div>}
+          </div>
+
+          {/* Add/Edit Input Section */}
+          <div
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              flexWrap: "wrap",
+            }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+            <input
+              placeholder="Name"
+              value={editingTodo ? editingTodo.name : name}
+              onChange={(e) =>
+                editingTodo
+                  ? setEditingTodo({ ...editingTodo, name: e.target.value })
+                  : setName(e.target.value)
+              }
+              style={{
+                flex: "1 1 50%",
+                width: "50%",    
+                paddingInline: "10px",
+                paddingBlock: "0.5rem",
+                borderRadius: "0.5rem",
+                border: "1px solid #333",
+                background: "#2a2a2a",
+                color: "#f0f0f0",
+              }}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            <input
+              placeholder="Note"
+              id="note"
+              value={editingTodo ? editingTodo.note : note}
+              onChange={(e) =>
+                editingTodo
+                  ? setEditingTodo({ ...editingTodo, note: e.target.value })
+                  : setNote(e.target.value)
+              }
+              style={{
+                flex: "1 1 20%",
+                width: "100px",
+                paddingInline: "10px",
+                paddingBlock: "0.5rem",
+                borderRadius: "0.5rem",
+                border: "1px solid #333",
+                background: "#2a2a2a",
+                color: "#f0f0f0",
+              }}
+            />
+            <input
+              type="number"
+              placeholder="Important"
+              id="important"
+              value={editingTodo ? editingTodo.important : important}
+              onChange={(e) =>
+                editingTodo
+                  ? setEditingTodo({
+                      ...editingTodo,
+                      important: parseFloat(e.target.value),
+                    })
+                  : setImportant(parseFloat(e.target.value))
+              }
+              style={{
+                flex: "1 1 10%",
+                width: "50px",
+                maxWidth: "50px",
+                paddingInline: "5px",
+                paddingBlock: "0.5rem",
+                borderRadius: "0.5rem",
+                border: "1px solid #333",
+                background: "#2a2a2a",
+                color: "#f0f0f0",
+              }}
+            />
+            <button
+              onClick={editingTodo ? saveEdit : addTodo}
+              style={{
+                flex: "1 1 10%",
+                width: "10%",
+                paddingBlock: "0.5rem",
+                background: editingTodo ? "#ffa000" : "#4caf50",
+                color: "#fff",
+                border: "none",
+                borderRadius: "0.5rem",
+                cursor: "pointer",
+              }}
+              onMouseOver={(e) =>
+                (e.currentTarget.style.background = editingTodo
+                  ? "#ffc107"
+                  : "#66bb6a")
+              }
+              onMouseOut={(e) =>
+                (e.currentTarget.style.background = editingTodo
+                  ? "#ffa000"
+                  : "#4caf50")
+              }
+            >
+              {editingTodo ? "Save" : "Add"}
+            </button>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        {/* History Section */}
+        <div style={{ width: "100%", maxWidth: "300px", background: "#00000070", backdropFilter: "blur(50px)", padding: "1.5rem", borderRadius: "1rem", boxShadow: "0 5px 15px rgba(0,0,0,0.5)" }}>
+          <h2>History (Last 10)</h2>
+          <ul>
+            {history
+              .slice(-10)
+              .reverse()
+              .map((h, i) => (
+                <li key={i} style={{ marginBottom: "0.25rem" }}>
+                  <span style={{ color: "#aaa" }}>
+                    [{new Date(h.timestamp).toLocaleTimeString()}]
+                  </span>{" "}
+                  {h.action}: {h.todo.name} {h.todo.note ? "(" : ""}{h.todo.note}{h.todo.note ? ")" : ""}
+                </li>
+              ))}
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
